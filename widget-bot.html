@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Widget Bot DecorArte</title>
+  <style>
+    :root {
+      --decorarte-primary: #ffffff;
+      --decorarte-secondary: #10b981;
+      --decorarte-bg: #111827;
+    }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #f3f4f6;
+      min-height: 100vh;
+    }
+
+    /* Botón flotante */
+    #decorarte-bot-button {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      width: 64px;
+      height: 64px;
+      border-radius: 9999px;
+      background: transparent;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 9999;
+      border: 0;
+      padding: 0;
+    }
+
+    #decorarte-bot-button img {
+      width: 100%;
+      height: 100%;
+      border-radius: 9999px;
+      object-fit: cover;
+      border: 2px solid #ffffff;
+      background: #ffffff;
+    }
+
+    /* Tooltip inicial "Habla conmigo..." */
+    #decorarte-tooltip {
+      position: fixed;
+      bottom: 38px;
+      right: 95px;
+      background: #ffffff;
+      color: #111827;
+      border-radius: 9999px;
+      padding: 6px 12px;
+      font-size: 12px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+      opacity: 0;
+      transform: translateY(10px) rotate(-2deg);
+      pointer-events: none;
+      transition: opacity 0.3s ease, transform 0.3s ease;
+      z-index: 9998;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    #decorarte-tooltip::after {
+      content: "";
+      position: absolute;
+      right: -6px;
+      bottom: 10px;
+      width: 10px;
+      height: 10px;
+      background: #ffffff;
+      transform: rotate(45deg);
+    }
+
+    #decorarte-tooltip.visible {
+      opacity: 1;
+      transform: translateY(0) rotate(0deg);
+      animation: tooltip-wiggle 1.2s ease-in-out infinite;
+    }
+
+    @keyframes tooltip-wiggle {
+      0%, 100% { transform: translateY(0) rotate(0deg); }
+      25% { transform: translateY(-2px) rotate(1.5deg); }
+      50% { transform: translateY(0) rotate(-1.5deg); }
+      75% { transform: translateY(-1px) rotate(1deg); }
+    }
+
+    /* Ventana de chat */
+    #decorarte-bot-window {
+      position: fixed;
+      bottom: 90px;
+      right: 20px;
+      width: 340px;
+      max-height: 520px;
+      background: #cdbaba;
+      border-radius: 16px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.45);
+      display: flex;              /* siempre flex, controlamos visibilidad por clase */
+      flex-direction: column;
+      overflow: hidden;
+      z-index: 9999;
+
+      opacity: 0;
+      transform: translateY(20px) scale(0.96);
+      pointer-events: none;
+      transition: opacity 0.25s ease, transform 0.25s ease;
+    }
+
+    #decorarte-bot-window.open {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      pointer-events: auto;
+    }
+
+    .dbot-header {
+      background: var(--decorarte-bg);
+      color: white;
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 13px;
+    }
+
+    .dbot-header-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Avatar con la mascota */
+    .dbot-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 9999px;
+      overflow: hidden;
+      flex-shrink: 0;
+      border: 2px solid #ffffff;
+      background: #ffffff;
+    }
+
+    .dbot-avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .dbot-status {
+      font-size: 11px;
+      color: #a5b4fc;
+    }
+
+    .dbot-close {
+      cursor: pointer;
+      font-size: 16px;
+      opacity: 0.8;
+    }
+
+    #decorarte-log {
+      padding: 8px;
+      background: #f9fafb;
+      font-size: 12px;
+      height: 260px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .dbot-input-area {
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      background: #f3f4f6;
+    }
+
+    #decorarte-input {
+      width: 100%;
+      resize: none;
+      font-size: 12px;
+      padding: 6px 8px;
+      border-radius: 10px;
+      border: 1px solid #d1d5db;
+      box-sizing: border-box;
+      min-height: 44px;
+      max-height: 80px;
+    }
+
+    .dbot-buttons {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .dbot-buttons-left {
+      display: flex;
+      gap: 6px;
+    }
+
+    .dbot-btn {
+      padding: 6px 10px;
+      border-radius: 9999px;
+      border: none;
+      cursor: pointer;
+      font-size: 11px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      white-space: nowrap;
+    }
+
+    #decorarte-send {
+      background: var(--decorarte-primary);
+      color: rgb(0, 0, 0);
+    }
+
+    #decorarte-voice {
+      background: var(--decorarte-secondary);
+      color: white;
+    }
+
+    .dbot-helper {
+      font-size: 10px;
+      color: #545454;
+      text-align: right;
+      flex: 1;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Contenido de prueba -->
+  <div style="padding:20px;">
+    <h2>Página de prueba DecorArte</h2>
+    <p>Aquí iría tu contenido normal de la tienda, productos, etc.</p>
+  </div>
+
+  <!-- Botón flotante con la mascota -->
+  <button id="decorarte-bot-button" title="Chatea con DecorArte">
+    <img
+      src="https://decorartereposteria.mx/wp-content/uploads/2025/12/MascotaDA-1.png"
+      alt="Asistente DecorArte"
+    />
+  </button>
+
+  <!-- Tooltip "Habla conmigo..." -->
+  <div id="decorarte-tooltip">
+    💬 Habla conmigo...
+  </div>
+
+  <!-- Ventana del widget -->
+  <div id="decorarte-bot-window">
+    <div class="dbot-header">
+      <div class="dbot-header-left">
+        <div class="dbot-avatar">
+          <img
+            src="https://decorartereposteria.mx/wp-content/uploads/2025/12/MascotaDA-1.png"
+            alt="Mascota DecorArte"
+          />
+        </div>
+        <div>
+          <div style="font-weight:600;">DecorArte Asistente</div>
+          <div class="dbot-status" id="decorarte-status">
+            Conectando...
+          </div>
+        </div>
+      </div>
+      <div class="dbot-close" id="decorarte-close">✕</div>
+    </div>
+
+    <div id="decorarte-log"></div>
+
+    <div class="dbot-input-area">
+      <textarea
+        id="decorarte-input"
+        rows="2"
+        placeholder="Escribe tu duda, por ejemplo: ¿Cuáles son los horarios?"
+      ></textarea>
+      <div class="dbot-buttons">
+        <div class="dbot-buttons-left">
+          <button class="dbot-btn" id="decorarte-send">
+            ➤ Enviar
+          </button>
+          <button class="dbot-btn" id="decorarte-voice">
+            🔊 Leer respuesta
+          </button>
+        </div>
+        <div class="dbot-helper">
+          Responde sobre DecorArte
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  const WS_URL = "wss://decorarte-realtime-bot-production.up.railway.app";
+
+  
+
+  let ws = null;
+  let isConnected = false;
+
+  const btn = document.getElementById("decorarte-bot-button");
+  const win = document.getElementById("decorarte-bot-window");
+  const closeBtn = document.getElementById("decorarte-close");
+  const logEl = document.getElementById("decorarte-log");
+  const inputEl = document.getElementById("decorarte-input");
+  const sendBtn = document.getElementById("decorarte-send");
+  const voiceBtn = document.getElementById("decorarte-voice");
+  const statusEl = document.getElementById("decorarte-status");
+  const tooltipEl = document.getElementById("decorarte-tooltip");
+
+  let lastAssistantText = "";
+
+  function log(msg) {
+    const time = new Date().toLocaleTimeString();
+    logEl.textContent += `[${time}] ${msg}\n`;
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function setStatus(text, color = "#a5b4fc") {
+    statusEl.textContent = text;
+    statusEl.style.color = color;
+  }
+
+  function connect() {
+    ws = new WebSocket(WS_URL);
+
+    ws.onopen = () => {
+      isConnected = true;
+      log("✅ Conectado al backend Realtime (ws)");
+      setStatus("En línea · responde sobre DecorArte", "#6ee7b7");
+    };
+
+    ws.onclose = () => {
+      isConnected = false;
+      log("❌ Desconectado del backend");
+      setStatus("Desconectado · reintentando...", "#f97373");
+
+      setTimeout(() => {
+        if (!isConnected) connect();
+      }, 2000);
+    };
+
+    ws.onerror = (err) => {
+      log("⚠️ Error WS: " + err.message);
+      setStatus("Error de conexión", "#f97373");
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+
+        if (data.type === "response.text.delta" && data.delta) {
+          lastAssistantText += data.delta;
+          log("🤖 (parcial) " + data.delta);
+        } else if (data.type === "response.text.done" && data.text) {
+          lastAssistantText = data.text;
+          log("🤖 " + data.text);
+        } else if (data.type === "response.done") {
+          log("🔁 Respuesta completada.");
+        } else if (data.type === "error") {
+          log(
+            "❌ Error desde backend/Realtime: " +
+              (data.error?.message || data.message || JSON.stringify(data))
+          );
+        }
+      } catch (e) {
+        console.error("Error parseando mensaje:", e, event.data);
+      }
+    };
+  }
+
+  function ensureConnection() {
+    if (!isConnected) connect();
+  }
+
+  /* 🚀 ABRIR WIDGET SOLO SI EL USUARIO DA CLICK */
+  function openWidget() {
+    win.classList.add("open");
+    ensureConnection();
+    inputEl.focus();
+  }
+
+  function closeWidget() {
+    win.classList.remove("open");
+  }
+
+  /* 💬 Tooltip "Habla conmigo..." */
+  function showTooltip() {
+    tooltipEl.classList.add("visible");
+
+    setTimeout(() => {
+      tooltipEl.classList.remove("visible");
+    }, 5000);
+  }
+
+  // Click del botón flotante ➜ abrir chat
+  btn.addEventListener("click", () => {
+    const isOpen = win.classList.contains("open");
+    if (isOpen) closeWidget();
+    else openWidget();
+  });
+
+  closeBtn.addEventListener("click", closeWidget);
+
+  // Enviar mensaje
+  function sendMessage() {
+    const text = inputEl.value.trim();
+    if (!text) return;
+
+    ensureConnection();
+
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      log("⚠️ WebSocket no listo, intenta de nuevo.");
+      return;
+    }
+
+    lastAssistantText = "";
+    log("🧑 Tú: " + text);
+
+    ws.send(
+      JSON.stringify({
+        type: "conversation.item.create",
+        item: {
+          type: "message",
+          role: "user",
+          content: [{ type: "input_text", text }],
+        },
+      })
+    );
+
+    ws.send(
+      JSON.stringify({
+        type: "response.create",
+        response: { modalities: ["text"] },
+      })
+    );
+
+    inputEl.value = "";
+  }
+
+  sendBtn.addEventListener("click", sendMessage);
+
+  inputEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+
+  voiceBtn.addEventListener("click", () => {
+    if (!lastAssistantText) return;
+    const utter = new SpeechSynthesisUtterance(lastAssistantText);
+    utter.lang = "es-MX";
+    speechSynthesis.speak(utter);
+  });
+
+  /* 🚀 COMPORTAMIENTO AL CARGAR LA PÁGINA
+     - Conectamos WebSocket
+     - Mostramos SOLO el tooltip
+     - Chat NO se abre automáticamente
+  */
+  window.addEventListener("load", () => {
+    connect();
+    showTooltip();
+  });
+</script>
+
+</body>
+</html>

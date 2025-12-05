@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Prueba Bot DecorArte Realtime</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #f3f4f6;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+    }
+    .container {
+      margin-top: 40px;
+      background: #ffffff;
+      padding: 16px;
+      border-radius: 12px;
+      max-width: 480px;
+      width: 100%;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+    }
+    h1 {
+      font-size: 18px;
+      margin-bottom: 8px;
+    }
+    #log {
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 8px;
+      height: 260px;
+      overflow-y: auto;
+      font-size: 13px;
+      background: #f9fafb;
+      margin-bottom: 8px;
+      white-space: pre-wrap;
+    }
+    textarea {
+      width: 100%;
+      resize: none;
+      font-size: 13px;
+      padding: 8px;
+      border-radius: 8px;
+      border: 1px solid #d1d5db;
+      box-sizing: border-box;
+      margin-bottom: 8px;
+    }
+    button {
+      padding: 8px 12px;
+      border-radius: 9999px;
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    #sendBtn {
+      background: #4f46e5;
+      color: white;
+      margin-right: 8px;
+    }
+    #voiceBtn {
+      background: #10b981;
+      color: white;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Bot DecorArte (Prueba Local)</h1>
+    <p style="font-size:12px; color:#6b7280; margin-top:0;">
+      Escribe un mensaje y verás la respuesta del asistente en tiempo (casi) real.
+    </p>
+    <div id="log"></div>
+    <textarea id="input" rows="2" placeholder="Escribe algo como: Hola, ¿cuáles son los horarios?"></textarea>
+    <div>
+      <button id="sendBtn">Enviar</button>
+      <button id="voiceBtn">Leer respuesta</button>
+    </div>
+  </div>
+<script>
+  const WS_URL = "ws://localhost:3001";
+  let ws = null;
+  let isConnected = false;
+
+  const logEl = document.getElementById("log");
+  const inputEl = document.getElementById("input");
+  const sendBtn = document.getElementById("sendBtn");
+  const voiceBtn = document.getElementById("voiceBtn");
+
+  let lastAssistantText = "";
+
+  function log(msg) {
+    const time = new Date().toLocaleTimeString();
+    logEl.textContent += `[${time}] ${msg}\n`;
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function connect() {
+    ws = new WebSocket(WS_URL);
+
+    ws.onopen = () => {
+      isConnected = true;
+      log("✅ Conectado al backend Realtime (ws)");
+    };
+
+    ws.onclose = () => {
+      isConnected = false;
+      log("❌ Desconectado del backend");
+    };
+
+    ws.onerror = (err) => {
+      log("⚠️ Error WS: " + err.message);
+      console.error(err);
+    };
+
+    // 👇 AQUÍ VIENE LA PARTE IMPORTANTE
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+
+        // Texto parcial
+        if (data.type === "response.text.delta" && data.delta) {
+          lastAssistantText += data.delta;
+          log("🤖 (parcial) " + data.delta);
+
+        // Texto final completo
+        } else if (data.type === "response.text.done" && data.text) {
+          lastAssistantText = data.text;
+          log("🤖 " + data.text);
+
+        } else if (data.type === "response.done") {
+          log("🔁 Respuesta completada.");
+
+        } else if (data.type === "error") {
+          log(
+            "❌ Error desde backend/Realtime: " +
+              (data.error?.message || data.message || JSON.stringify(data))
+          );
+
+        } else {
+          // Si quieres ver TODO lo que llega, descomenta esta línea:
+          // log("📦 Evento: " + JSON.stringify(data));
+        }
+      } catch (e) {
+        console.error("Error parseando mensaje:", e, event.data);
+      }
+    };
+  }
+
+  function ensureConnection() {
+    if (!isConnected) {
+      connect();
+    }
+  }
+
+  // Click en "Enviar"
+  sendBtn.addEventListener("click", () => {
+    const text = inputEl.value.trim();
+    if (!text) return;
+    ensureConnection();
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      log("⚠️ WebSocket aún no está listo. Intenta otra vez en unos segundos.");
+      return;
+    }
+
+    lastAssistantText = "";
+    log("🧑 Tú: " + text);
+
+    const itemEvent = {
+      type: "conversation.item.create",
+      item: {
+        type: "message",
+        role: "user",
+        content: [
+          {
+            type: "input_text",
+            text: text,
+          },
+        ],
+      },
+    };
+
+    const responseEvent = {
+      type: "response.create",
+      response: {
+        modalities: ["text"],
+      },
+    };
+
+    ws.send(JSON.stringify(itemEvent));
+    ws.send(JSON.stringify(responseEvent));
+
+    inputEl.value = "";
+  });
+
+  voiceBtn.addEventListener("click", () => {
+    if (!lastAssistantText) {
+      log("🔈 No hay texto aún para leer.");
+      return;
+    }
+    if (!window.speechSynthesis) {
+      log("⚠️ Este navegador no soporta speechSynthesis.");
+      return;
+    }
+    const utter = new SpeechSynthesisUtterance(lastAssistantText);
+    utter.lang = "es-MX";
+    speechSynthesis.speak(utter);
+  });
+
+  connect();
+</script>
+
+
+  
+</body>
+</html>
